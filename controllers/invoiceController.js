@@ -7,7 +7,20 @@ const PDFDocument = require('pdfkit');
 // @route   POST /api/invoices
 // @access  Private/Admin
 const createInvoice = asyncHandler(async (req, res) => {
-    const { customerId, items, paymentStatus } = req.body;
+    const {
+        customerId,
+        items,
+        paymentStatus,
+        deliveryNote,
+        modeTermsOfPayment,
+        referenceNoAndDate,
+        otherReferences,
+        dispatchDocNo,
+        deliveryNoteDate,
+        dispatchedThrough,
+        destination,
+        termsOfDelivery
+    } = req.body;
 
     const customer = await Customer.findById(customerId);
 
@@ -21,22 +34,23 @@ const createInvoice = asyncHandler(async (req, res) => {
     let gstTotal = 0;
 
     const processedItems = items.map((item) => {
-        const lineSubtotal = item.quantity * item.unitPrice;
+        const itemSubtotal = item.quantity * item.unitPrice;
+        const discountAmount = (itemSubtotal * (item.discount || 0)) / 100;
+        const lineSubtotal = itemSubtotal - discountAmount;
         const lineGst = (lineSubtotal * item.gstPercent) / 100;
-        const lineTotal = lineSubtotal + lineGst;
 
         subtotal += lineSubtotal;
         gstTotal += lineGst;
 
         return {
             ...item,
-            lineTotal,
+            lineTotal: lineSubtotal,
         };
     });
 
     const grandTotal = subtotal + gstTotal;
 
-    // Generate Invoice Number: INV-YYYYMMDD-XXXX
+    // Generate Invoice Number
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const count = await Invoice.countDocuments({
         createdAt: { $gte: new Date().setHours(0, 0, 0, 0) },
@@ -52,6 +66,15 @@ const createInvoice = asyncHandler(async (req, res) => {
         gstTotal,
         grandTotal,
         paymentStatus,
+        deliveryNote,
+        modeTermsOfPayment,
+        referenceNoAndDate,
+        otherReferences,
+        dispatchDocNo,
+        deliveryNoteDate,
+        dispatchedThrough,
+        destination,
+        termsOfDelivery
     });
 
     res.status(201).json(invoice);
@@ -93,7 +116,7 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
     // Create PDF document
     const doc = new PDFDocument({
         size: 'A4',
-        margin: 50,
+        margin: 30,
         bufferPages: true,
     });
 
@@ -102,245 +125,187 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="Invoice_${invoice.invoiceNumber}.pdf"`);
     doc.pipe(res);
 
-    // Colors
-    const colors = {
-        black: '#000000',
-        gray900: '#111827',
-        gray600: '#4b5563',
-        gray500: '#6b7280',
-        gray100: '#f3f4f6',
+    const numberToWords = (num) => {
+        const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
+        const b = ['', '', 'Twenty ', 'Thirty ', 'Forty ', 'Fifty ', 'Sixty ', 'Seventy ', 'Eighty ', 'Ninety '];
+        const format = (n) => {
+            if (n < 20) return a[n];
+            const digit = n % 10;
+            if (n < 100) return b[Math.floor(n / 10)] + (digit ? a[digit] : '');
+            if (n < 1000) return a[Math.floor(n / 100)] + 'Hundred ' + (n % 100 ? 'and ' + format(n % 100) : '');
+            if (n < 100000) return format(Math.floor(n / 1000)) + 'Thousand ' + (n % 1000 ? format(n % 1000) : '');
+            if (n < 10000000) return format(Math.floor(n / 100000)) + 'Lakh ' + (n % 100000 ? format(n % 100000) : '');
+            return format(Math.floor(n / 10000000)) + 'Crore ' + (n % 10000000 ? format(n % 10000000) : '');
+        };
+        const split = Math.abs(num).toFixed(2).split('.');
+        let words = format(parseInt(split[0])) + 'Rupees ';
+        if (split[1] && parseInt(split[1]) > 0) {
+            words += 'and ' + format(parseInt(split[1])) + 'Paise ';
+        }
+        return words + 'Only';
     };
 
-    // Header with simple branding
-    doc.fillColor(colors.black)
-        .fontSize(24)
-        .font('Helvetica-Bold')
-        .text('Vikalp Electronics', 50, 45);
+    const formatDate = (date) => {
+        if (!date) return '-';
+        return new Date(date).toLocaleDateString('en-GB', {
+            day: '2-digit',
+            month: 'short',
+            year: '2-digit'
+        }).replace(/ /g, '-');
+    };
 
-    doc.fontSize(10)
-        .font('Helvetica-Bold')
-        .fillColor(colors.gray600)
-        .text('SALES & SERVICE SPECIALIST', 50, 75, { characterSpacing: 2 });
+    // Header Structure
+    doc.fontSize(12).font('Helvetica-Bold').text('Tax invoice', 30, 30, { align: 'center' });
+    doc.rect(30, 45, 535, 110).stroke(); // Header frame
 
-    // Shop Details in Header
-    doc.fontSize(8)
-        .font('Helvetica')
-        .fillColor(colors.gray500)
-        .text('Murlidhar Nagar 1, Gokul Nagar, Jamnagar-361004', 50, 92)
-        .text('Mo: +91 9374170929 / +91 7016223029', 50, 104);
+    // Left: Seller Info
+    doc.fontSize(14).text('Vikalp Electric & Refrigeration', 35, 55);
+    doc.fontSize(9).font('Helvetica').text('Street No.3, Murlidhar Nagar 1,', 35, 70);
+    doc.text('Gokul Nagar,', 35, 80);
+    doc.text('Jamnagar - 361004.', 35, 90);
+    doc.text('MO : 9374170929 / 7016223029', 35, 100);
+    doc.font('Helvetica-Bold').text('GSTIN/UIN: 24AHWPB8203B1ZP', 35, 115);
+    doc.font('Helvetica').text('State Name : Gujarat, Code : 24', 35, 125);
+    doc.text('E-Mail : vikalpelectronicofficial@gmail.com', 35, 135);
 
-    // Invoice Title
-    doc.fontSize(36)
-        .font('Helvetica-Bold')
-        .fillColor(colors.gray100)
-        .text('INVOICE', 350, 45, { align: 'right' });
+    // Right: Metadata Grid
+    doc.moveTo(280, 45).lineTo(280, 155).stroke(); // Divider
+    doc.moveTo(280, 67).lineTo(565, 67).stroke();
+    doc.moveTo(280, 89).lineTo(565, 89).stroke();
+    doc.moveTo(280, 111).lineTo(565, 111).stroke();
+    doc.moveTo(280, 133).lineTo(565, 133).stroke();
+    doc.moveTo(422, 45).lineTo(422, 133).stroke(); // Sub-divider
 
-    doc.moveTo(50, 120)
-        .lineTo(545, 120)
-        .lineWidth(2)
-        .strokeColor(colors.black)
-        .stroke();
+    const gridX1 = 285;
+    const gridX2 = 427;
 
-    // Bill To & Invoice Info
-    const infoY = 145;
-    doc.fillColor(colors.gray600)
-        .fontSize(9)
-        .font('Helvetica-Bold')
-        .text('BILL TO:', 50, infoY);
+    doc.fontSize(7).font('Helvetica').text('Invoice No.', gridX1, 50);
+    doc.fontSize(9).font('Helvetica-Bold').text(invoice.invoiceNumber, gridX1, 57);
+    doc.fontSize(7).font('Helvetica').text('Dated', gridX2, 50);
+    doc.fontSize(9).font('Helvetica-Bold').text(formatDate(invoice.invoiceDate), gridX2, 57);
 
-    doc.fillColor(colors.black)
-        .fontSize(12)
-        .font('Helvetica-Bold')
-        .text(invoice.customer?.name || 'Customer Name', 50, infoY + 15);
+    doc.fontSize(7).font('Helvetica').text('Delivery Note', gridX1, 72);
+    doc.fontSize(9).font('Helvetica-Bold').text(invoice.deliveryNote || '-', gridX1, 79);
+    doc.fontSize(7).font('Helvetica').text('Mode/Terms of Payment', gridX2, 72);
+    doc.fontSize(9).font('Helvetica-Bold').text(invoice.modeTermsOfPayment || '-', gridX2, 79);
 
-    doc.fontSize(10)
-        .font('Helvetica')
-        .fillColor(colors.gray600)
-        .text(invoice.customer?.address || '', 50, infoY + 32, { width: 250 });
+    doc.fontSize(7).font('Helvetica').text('Reference No. & Date.', gridX1, 94);
+    doc.fontSize(9).font('Helvetica-Bold').text(invoice.referenceNoAndDate || '-', gridX1, 101);
+    doc.fontSize(7).font('Helvetica').text('Other References', gridX2, 94);
+    doc.fontSize(9).font('Helvetica-Bold').text(invoice.otherReferences || '-', gridX2, 101);
 
-    doc.fontSize(10)
-        .font('Helvetica-Bold')
-        .fillColor(colors.black)
-        .text(`Phone: ${invoice.mobile}`, 50, infoY + 55);
+    doc.fontSize(7).font('Helvetica').text('Dispatch Doc No.', gridX1, 116);
+    doc.fontSize(9).font('Helvetica-Bold').text(invoice.dispatchDocNo || '-', gridX1, 123);
+    doc.fontSize(7).font('Helvetica').text('Delivery Note Date', gridX2, 116);
+    doc.fontSize(9).font('Helvetica-Bold').text(formatDate(invoice.deliveryNoteDate), gridX2, 123);
 
-    // Right side info
-    doc.fillColor(colors.gray600)
-        .fontSize(9)
-        .font('Helvetica-Bold')
-        .text('INVOICE DETAILS:', 350, infoY);
+    doc.fontSize(7).font('Helvetica').text('Dispatched through', gridX1, 138);
+    doc.fontSize(9).font('Helvetica-Bold').text(invoice.dispatchedThrough || '-', gridX1, 145);
+    doc.fontSize(7).font('Helvetica').text('Destination', gridX2, 138);
+    doc.fontSize(9).font('Helvetica-Bold').text(invoice.destination || '-', gridX2, 145);
 
-    doc.fillColor(colors.black)
-        .fontSize(10)
-        .font('Helvetica')
-        .text(`Invoice Number:`, 350, infoY + 15)
-        .font('Helvetica-Bold')
-        .text(`#${invoice.invoiceNumber}`, 450, infoY + 15, { align: 'right' });
+    // Buyer Information Section
+    doc.rect(30, 155, 535, 60).stroke();
+    doc.fontSize(8).font('Helvetica').text('Buyer (Bill to)', 35, 160);
+    doc.fontSize(12).font('Helvetica-Bold').text(invoice.customer?.name || 'N/A', 35, 172);
+    doc.fontSize(10).font('Helvetica').text(invoice.customer?.address || 'Jamnagar', 35, 187, { width: 520 });
+    doc.text('State Name : Gujarat, Code : 24', 35, 202);
 
-    doc.font('Helvetica')
-        .text(`Invoice Date:`, 350, infoY + 30)
-        .font('Helvetica-Bold')
-        .text(`${new Date(invoice.invoiceDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`, 420, infoY + 30, { align: 'right' });
+    // Items Table
+    const tableTop = 215;
+    const tableBottom = 580;
+    doc.rect(30, tableTop, 535, tableBottom - tableTop).stroke();
+    doc.moveTo(30, tableTop + 20).lineTo(565, tableTop + 20).stroke(); // Header bottom
 
-    // Amount Due Box
-    doc.rect(350, infoY + 55, 195, 45)
-        .fillColor(colors.gray100)
-        .fill();
+    /** 
+     * Uniform Column Configuration for Production Standards 
+     * Rate and Amount columns adjusted to have equal visual importance
+     **/
+    const colX = {
+        sl: 30,
+        desc: 60,
+        hsn: 215,
+        gst: 265,
+        qty: 310,
+        rate: 375,  // Increased width
+        per: 435,
+        disc: 465,
+        amount: 495 // Equal width to Rate
+    };
 
-    doc.fillColor(colors.black)
-        .fontSize(9)
-        .font('Helvetica-Bold')
-        .text('GRAND TOTAL:', 360, infoY + 63);
+    doc.fontSize(8).font('Helvetica-Bold');
+    doc.text('Sl No', colX.sl + 5, tableTop + 7);
+    doc.text('Description of Goods', colX.desc + 5, tableTop + 7);
+    doc.text('HSN/SAC', colX.hsn + 5, tableTop + 7);
+    doc.text('GST %', colX.gst + 5, tableTop + 7);
+    doc.text('Quantity', colX.qty + 5, tableTop + 7);
+    doc.text('Rate', colX.rate, tableTop + 7, { width: colX.per - colX.rate - 2, align: 'right' });
+    doc.text('per', colX.per + 5, tableTop + 7);
+    doc.text('Disc %', colX.disc + 2, tableTop + 7);
+    doc.text('Amount', colX.amount, tableTop + 7, { width: 565 - colX.amount - 5, align: 'right' });
 
-    doc.fontSize(18)
-        .font('Helvetica-Bold')
-        .text(`INR ${invoice.grandTotal?.toLocaleString()}`, 360, infoY + 78);
-
-    // Table Header
-    const tableTop = 270; // Moved up slightly
-    const col1X = 50;
-    const col2X = 350;
-    const col3X = 420;
-    const col4X = 500;
-
-    doc.fillColor(colors.black)
-        .fontSize(9)
-        .font('Helvetica-Bold');
-
-    doc.text('SERVICE DESCRIPTION', col1X, tableTop);
-    doc.text('QTY', col2X, tableTop, { width: 40, align: 'center' });
-    doc.text('UNIT PRICE', col3X, tableTop, { width: 70, align: 'right' });
-    doc.text('TOTAL', col4X, tableTop, { width: 45, align: 'right' });
-
-    doc.moveTo(50, tableTop + 12)
-        .lineTo(545, tableTop + 12)
-        .lineWidth(1)
-        .strokeColor(colors.black)
-        .stroke();
-
-    // Table Rows
-    let yPosition = tableTop + 20;
-    invoice.items?.forEach((item, index) => {
-        const itemHeight = doc.heightOfString(item.serviceName, { width: 280 });
-
-        doc.fontSize(9) // Smaller font for items
-            .font('Helvetica-Bold')
-            .fillColor(colors.black)
-            .text(item.serviceName, col1X, yPosition, { width: 280 });
-
-        doc.font('Helvetica')
-            .text(item.quantity.toString(), col2X, yPosition, { width: 40, align: 'center' });
-
-        doc.text(`${item.unitPrice?.toLocaleString()}`, col3X, yPosition, { width: 70, align: 'right' });
-
-        doc.font('Helvetica-Bold')
-            .text(`${item.lineTotal?.toLocaleString()}`, col4X, yPosition, { width: 45, align: 'right' });
-
-        yPosition += Math.max(itemHeight, 12) + 8; // Tighter vertical spacing
-
-        // Row separator
-        doc.moveTo(50, yPosition - 4)
-            .lineTo(545, yPosition - 4)
-            .lineWidth(0.5)
-            .strokeColor(colors.gray100)
-            .stroke();
+    // Draw vertical column separators
+    Object.values(colX).slice(1).forEach(x => {
+        doc.moveTo(x, tableTop).lineTo(x, tableBottom).stroke();
     });
 
-    // Summary Section - Compacted
-    const summaryX = 350;
-    yPosition += 5;
-
-    doc.fillColor(colors.gray600)
-        .fontSize(9)
-        .font('Helvetica')
-        .text('Subtotal:', summaryX, yPosition);
-    doc.fillColor(colors.black)
-        .text(`${invoice.subtotal?.toLocaleString()}`, col4X, yPosition, { width: 45, align: 'right' });
-
-    yPosition += 15;
-    doc.fillColor(colors.gray600)
-        .text('Tax (GST):', summaryX, yPosition);
-    doc.fillColor(colors.black)
-        .text(`${invoice.gstTotal?.toLocaleString()}`, col4X, yPosition, { width: 45, align: 'right' });
-
-    yPosition += 20;
-    doc.moveTo(summaryX, yPosition - 2)
-        .lineTo(545, yPosition - 2)
-        .lineWidth(1)
-        .strokeColor(colors.black)
-        .stroke();
-
-    doc.fontSize(11)
-        .font('Helvetica-Bold')
-        .text('GRAND TOTAL:', summaryX, yPosition);
-    doc.text(`INR ${invoice.grandTotal?.toLocaleString()}`, col4X, yPosition, { width: 45, align: 'right' });
-
-    // Footer
-    const footerY = 730;
-
-    // Bottom Branding Section
-    doc.rect(50, footerY - 5, 495, 0.5)
-        .fillColor(colors.gray200)
-        .fill();
-
-    doc.fillColor(colors.black)
-        .fontSize(9)
-        .font('Helvetica-Bold')
-        .text('NOTES & INSTRUCTIONS:', 50, footerY + 5);
-
-    doc.fontSize(8)
-        .font('Helvetica')
-        .fillColor(colors.gray600);
-
-    const notes = [
-        '1. This is a computer generated invoice and does not require a physical signature.',
-        '2. Service warranty applies as per company policy from the date of invoice.'
-    ];
-
-    notes.forEach((note, i) => {
-        doc.text(note, 50, footerY + 18 + (i * 10));
+    let y = tableTop + 25;
+    invoice.items.forEach((item, i) => {
+        const rowHeight = 25;
+        doc.fontSize(9).font('Helvetica');
+        doc.text((i + 1).toString(), colX.sl, y, { width: 30, align: 'center' });
+        doc.font('Helvetica-Bold').text(item.serviceName, colX.desc + 5, y, { width: 150 });
+        doc.font('Helvetica').text(item.hsnCode || '-', colX.hsn + 5, y);
+        doc.text(`${item.gstPercent}%`, colX.gst + 5, y);
+        doc.font('Helvetica-Bold').text(`${item.quantity} ${item.per || 'Pcs'}`, colX.qty + 5, y);
+        doc.font('Helvetica').text(item.unitPrice.toFixed(2), colX.rate, y, { width: colX.per - colX.rate - 2, align: 'right' });
+        doc.text(item.per || 'Pcs', colX.per + 5, y);
+        doc.text(item.discount ? `${item.discount}%` : '-', colX.disc + 5, y);
+        doc.font('Helvetica-Bold').text(item.lineTotal.toFixed(2), colX.amount, y, { width: 565 - colX.amount - 5, align: 'right' });
+        y += rowHeight;
     });
 
-    // Authorized Signatory
-    doc.fillColor(colors.black)
-        .font('Helvetica-Bold')
-        .fontSize(10)
-        .text('FOR, VIKALP ELECTRONICS', 350, footerY + 35, { align: 'right' });
+    // Space for Tax Breakdown
+    y = tableBottom - 60;
+    const gstRate = invoice.items[0]?.gstPercent || 18;
+    const splitGstRate = (gstRate / 2).toFixed(1);
 
-    doc.fontSize(8)
-        .font('Helvetica')
-        .text('Authorized Signatory', 350, footerY + 85, { align: 'right' });
+    doc.fontSize(9).font('Helvetica-Bold');
+    doc.text(`CGST Output @ ${splitGstRate}%`, colX.desc + 5, y);
+    doc.text(`${splitGstRate}%`, colX.rate, y, { width: colX.per - colX.rate - 2, align: 'right' });
+    doc.text((invoice.gstTotal / 2).toFixed(2), colX.amount, y, { width: 565 - colX.amount - 5, align: 'right' });
 
-    // Shop Info Footer - Stick to bottom
-    const bottomBarY = 805;
-    doc.rect(0, bottomBarY, 612, 38)
-        .fillColor(colors.black)
-        .fill();
+    y += 15;
+    doc.text(`SGST Output @ ${splitGstRate}%`, colX.desc + 5, y);
+    doc.text(`${splitGstRate}%`, colX.rate, y, { width: colX.per - colX.rate - 2, align: 'right' });
+    doc.text((invoice.gstTotal / 2).toFixed(2), colX.amount, y, { width: 565 - colX.amount - 5, align: 'right' });
 
-    doc.fillColor('#ffffff')
-        .fontSize(10)
-        .font('Helvetica-Bold')
-        .text('Vikalp Electronics', 0, bottomBarY + 8, { align: 'center', width: 612 });
+    // Summary Total Row
+    doc.rect(30, tableBottom, 535, 20).stroke();
+    doc.fontSize(10).font('Helvetica-Bold').text('Total', colX.desc + 5, tableBottom + 5);
+    const totalQty = invoice.items.reduce((acc, i) => acc + i.quantity, 0);
+    doc.text(`${totalQty} Pcs`, colX.qty + 5, tableBottom + 5);
+    doc.fontSize(12).text(`₹ ${invoice.grandTotal.toFixed(2)}`, colX.amount, tableBottom + 4, { width: 565 - colX.amount - 5, align: 'right' });
 
-    doc.fontSize(7.5)
-        .font('Helvetica')
-        .text('Murlidhar Nagar 1, Gokul Nagar, Jamnagar-361004 | Mo: +91 9374170929 / +91 7016223029', 0, bottomBarY + 22, { align: 'center', width: 612 });
+    // Footer Implementation
+    y = tableBottom + 30;
+    doc.fontSize(9).font('Helvetica-Bold').text('Amount Chargeable (in words)', 35, y);
+    doc.fontSize(10).text(numberToWords(invoice.grandTotal), 35, y + 15);
+
+    y += 45;
+    doc.fontSize(9).font('Helvetica-Bold').text('Declaration', 35, y);
+    doc.moveTo(35, y + 10).lineTo(85, y + 10).stroke();
+    doc.fontSize(8).font('Helvetica').text('We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.', 35, y + 15, { width: 250 });
+
+    // Signatory Area
+    const sigY = 650;
+    doc.fontSize(10).font('Helvetica-Bold').text('for Vikalp Electric & Refrigeration', 400, sigY, { align: 'right', width: 160 });
+    doc.fontSize(9).text('Authorised Signatory', 400, sigY + 50, { align: 'right', width: 160 });
+
+    doc.fontSize(9).font('Helvetica-Bold').text('SUBJECT TO JAMNAGAR JURISDICTION', 30, 780, { align: 'center', width: 535 });
+    doc.fontSize(8).font('Helvetica').text('This is a Computer Generated Invoice', 30, 792, { align: 'center', width: 535 });
 
     doc.end();
-});
-
-// @desc    Delete invoice
-// @route   DELETE /api/invoices/:id
-// @access  Private/Admin
-const deleteInvoice = asyncHandler(async (req, res) => {
-    const invoice = await Invoice.findById(req.params.id);
-
-    if (invoice) {
-        await Invoice.deleteOne({ _id: req.params.id });
-        res.json({ message: 'Invoice removed' });
-    } else {
-        res.status(404);
-        throw new Error('Invoice not found');
-    }
 });
 
 module.exports = {
@@ -348,5 +313,4 @@ module.exports = {
     getInvoices,
     getInvoiceById,
     downloadInvoicePDF,
-    deleteInvoice,
 };
