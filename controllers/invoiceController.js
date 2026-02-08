@@ -281,11 +281,29 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
     doc.text((invoice.gstTotal / 2).toFixed(2), colX.amount, y, { width: 565 - colX.amount - 5, align: 'right' });
 
     // Summary Total Row
-    doc.rect(30, tableBottom, 535, 20).stroke();
-    doc.fontSize(10).font('Helvetica-Bold').text('Total', colX.desc + 5, tableBottom + 5);
+    // ===== Summary Total Row (Fixed & Aligned) =====
+    const totalRowHeight = 25;
+
+    doc.rect(30, tableBottom, 535, totalRowHeight).stroke();
+
+    doc.fontSize(10).font('Helvetica-Bold')
+        .text('Total', colX.desc + 5, tableBottom + 7);
+
     const totalQty = invoice.items.reduce((acc, i) => acc + i.quantity, 0);
-    doc.text(`${totalQty} Pcs`, colX.qty + 5, tableBottom + 5);
-    doc.fontSize(12).text(`₹ ${invoice.grandTotal.toFixed(2)}`, colX.amount, tableBottom + 4, { width: 565 - colX.amount - 5, align: 'right' });
+    doc.fontSize(11).font('Helvetica-Bold')
+        .text(`${totalQty} Pcs`, colX.qty + 5, tableBottom + 7);
+
+    doc.fontSize(11).font('Helvetica-Bold')
+        .text(
+            `RS.${invoice.grandTotal.toFixed(2)}`,
+            colX.amount,
+            tableBottom + 6,
+            {
+                width: 565 - colX.amount - 10,
+                align: 'center',
+            }
+        );
+
 
     // Footer Implementation
     y = tableBottom + 30;
