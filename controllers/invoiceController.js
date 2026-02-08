@@ -164,7 +164,7 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
     doc.text('Gokul Nagar,', 35, 80);
     doc.text('Jamnagar - 361004.', 35, 90);
     doc.text('MO : 9374170929 / 7016223029', 35, 100);
-    doc.font('Helvetica-Bold').text('GSTIN/UIN: 24AHWPB8203B1ZP', 35, 115);
+    doc.font('Helvetica-Bold').text('GSTIN/UIN: ---------------', 35, 115);
     doc.font('Helvetica').text('State Name : Gujarat, Code : 24', 35, 125);
     doc.text('E-Mail : vikalpelectronicofficial@gmail.com', 35, 135);
 
