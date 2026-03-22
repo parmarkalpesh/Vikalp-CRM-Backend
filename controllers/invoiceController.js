@@ -164,7 +164,7 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
     doc.text('Gokul Nagar,', 35, 80);
     doc.text('Jamnagar - 361004.', 35, 90);
     doc.text('MO : 9374170929 / 7016223029', 35, 100);
-    doc.font('Helvetica-Bold').text('GSTIN/UIN: 24AHWPB8203B1ZP', 35, 115);
+    doc.font('Helvetica-Bold').text('GSTIN/UIN: 24ASIPP4041L1ZL', 35, 115);
     doc.font('Helvetica').text('State Name : Gujarat, Code : 24', 35, 125);
     doc.text('E-Mail : vikalpelectronicofficial@gmail.com', 35, 135);
 
@@ -281,11 +281,29 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
     doc.text((invoice.gstTotal / 2).toFixed(2), colX.amount, y, { width: 565 - colX.amount - 5, align: 'right' });
 
     // Summary Total Row
-    doc.rect(30, tableBottom, 535, 20).stroke();
-    doc.fontSize(10).font('Helvetica-Bold').text('Total', colX.desc + 5, tableBottom + 5);
+    // ===== Summary Total Row (Fixed & Aligned) =====
+    const totalRowHeight = 25;
+
+    doc.rect(30, tableBottom, 535, totalRowHeight).stroke();
+
+    doc.fontSize(10).font('Helvetica-Bold')
+        .text('Total', colX.desc + 5, tableBottom + 7);
+
     const totalQty = invoice.items.reduce((acc, i) => acc + i.quantity, 0);
-    doc.text(`${totalQty} Pcs`, colX.qty + 5, tableBottom + 5);
-    doc.fontSize(12).text(`₹ ${invoice.grandTotal.toFixed(2)}`, colX.amount, tableBottom + 4, { width: 565 - colX.amount - 5, align: 'right' });
+    doc.fontSize(11).font('Helvetica-Bold')
+        .text(`${totalQty} Pcs`, colX.qty + 5, tableBottom + 7);
+
+    doc.fontSize(11).font('Helvetica-Bold')
+        .text(
+            `RS.${invoice.grandTotal.toFixed(2)}`,
+            colX.amount,
+            tableBottom + 6,
+            {
+                width: 565 - colX.amount - 10,
+                align: 'center',
+            }
+        );
+
 
     // Footer Implementation
     y = tableBottom + 30;
