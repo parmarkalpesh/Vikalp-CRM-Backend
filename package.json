@@ -2,12 +2,11 @@
   "name": "server",
   "version": "1.0.0",
   "description": "Backend API for Vikalp CRM - Electronics & Refrigeration Management System",
-  "main": "app.js",
+  "main": "index.js",
   "scripts": {
     "start": "node app.js",
     "dev": "nodemon app.js",
-    "seed": "node seed.js",
-    "build": "echo 'build complete'"
+    "seed": "node seed.js"
   },
   "keywords": [],
   "author": "",
