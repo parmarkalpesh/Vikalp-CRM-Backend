@@ -293,6 +293,13 @@ const downloadInvoicePDF = asyncHandler(async (req, res) => {
     doc.fontSize(10).text(numberToWords(invoice.grandTotal), 35, y + 15);
 
     y += 45;
+        doc.fontSize(9).font('Helvetica-Bold').text('Bank Details:', 35, y);
+    doc.fontSize(8).font('Helvetica').text('A/C Holder: ', 35, y + 15, { continued: true }).font('Helvetica-Bold').text('Vikalp Electric and refrigeration');
+    doc.font('Helvetica').text('A/C No: ', 35, y + 25, { continued: true }).font('Helvetica-Bold').text('21630200000007');
+    doc.font('Helvetica').text('IFSC Code: ', 35, y + 35, { continued: true }).font('Helvetica-Bold').text('BARBOBGGBXX');
+    doc.font('Helvetica').text('Bank Name : ', 35, y + 45, { continued: true }).font('Helvetica-Bold').text('Gujrat Gramin Bank');
+
+    y += 65;
     doc.fontSize(9).font('Helvetica-Bold').text('Declaration', 35, y);
     doc.moveTo(35, y + 10).lineTo(85, y + 10).stroke();
     doc.fontSize(8).font('Helvetica').text('We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.', 35, y + 15, { width: 250 });
